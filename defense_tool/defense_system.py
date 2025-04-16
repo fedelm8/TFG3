@@ -16,7 +16,6 @@ SITIOS_RESTRINGIDOS = [
 ]
 COMANDOS_PELIGROSOS = ["nmap", "tcpdump", "netstat", "bash", "nc", "rm", "chmod 777", "curl", "wget", "scp"]
 
-
 # Ruta del log en carpeta 'logs' junto al script
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(BASE_DIR, "logs")
@@ -69,15 +68,6 @@ Se ha detectado una posible intrusión o acceso no permitido al sistema operativ
         print(f"[X] Error al enviar correo: {e}")
 
 
-def bloquear_archivo():
-    try:
-        os.chmod(ARCHIVO, 0o000)
-        print("[BLOQUEO] Permisos eliminados del archivo para impedir lectura.")
-    except Exception as e:
-        print(f"[X] Error al bloquear el archivo: {e}")
-
-
-# ===================== MONITOREO =====================
 def monitorear_defensa():
     print(f"[*] Defensa activa. Monitorizando accesos peligrosos...")
     timestamp = datetime.now().strftime("%H:%M:%S")
@@ -117,12 +107,16 @@ def monitorear_defensa():
                     if addr_line and "addr=" in addr_line:
                         ip = addr_line.split("addr=")[-1].strip().split()[0]
 
-                    if any(recurso.startswith(path) for path in SITIOS_RESTRINGIDOS) or any(cmd in recurso for cmd in COMANDOS_PELIGROSOS):
+                    # Revisión de rutas accedidas
+                    path_lines = [line for line in log.splitlines() if "name=" in line]
+                    accede_sitio_restringido = any(any(path in line for path in SITIOS_RESTRINGIDOS) for line in path_lines)
+
+                    if accede_sitio_restringido or any(cmd in recurso for cmd in COMANDOS_PELIGROSOS):
                         print("[DEFENSA] Actividad sospechosa detectada.")
                         print(f"  ➤ Usuario: {usuario}")
                         print(f"  ➤ IP: {ip}")
                         print(f"  ➤ Recurso: {recurso}")
-                        registrar_log(usuario, ip, recurso)
+                        registrar_log(usuario, ip)
                         enviar_alerta_gmail(usuario, ip, recurso)
 
                     eventos_defensa.add(log)
@@ -131,6 +125,7 @@ def monitorear_defensa():
 
     except KeyboardInterrupt:
         print("\n[+] Monitor finalizado por el usuario. Cerrando...")
+
 
 if __name__ == "__main__":
     monitorear_defensa()
