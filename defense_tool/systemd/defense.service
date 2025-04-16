@@ -1,0 +1,13 @@
+[Unit]
+Description=Defensa de archivos sensibles.
+After=network.target auditd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/monitor_defensa/defense_system.py
+Restart=on-failure
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
