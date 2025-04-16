@@ -50,7 +50,7 @@ Se ha detectado una posible intrusión o acceso no permitido al sistema operativ
 - Hora: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 """
 
-    contrasena = "gsxacdvzlnelgitx"
+    contrasena = "gdpnbpksefsnuqxh"
 
     msg = MIMEMultipart()
     msg["From"] = remitente
