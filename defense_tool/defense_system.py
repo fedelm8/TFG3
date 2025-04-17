@@ -6,6 +6,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import pwd  # Para traducir UID a nombre de usuario
+import shlex
 
 ARCHIVO = os.path.expanduser("/home/osboxes/Documents/tarjetas_bancarias.txt")
 CLAVE = "clave_defensa"
@@ -26,9 +27,8 @@ os.makedirs(LOG_DIR, exist_ok=True)
 
 eventos_defensa = set()
 
-def registrar_log(usuario, ip, rutas_accedidas):
-    rutas_txt = "\n".join(f"  - {ruta}" for ruta in rutas_accedidas) if rutas_accedidas else "  - No determinado"
-    mensaje = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Usuario: {usuario} | IP: {ip} | Rutas accedidas:\n{rutas_txt}\n"
+def registrar_log(usuario, ip):
+    mensaje = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Usuario: {usuario} | IP: {ip}\n"
     try:
         with open(LOG_PATH, "a") as log_file:
             log_file.write(mensaje)
@@ -54,6 +54,7 @@ Se ha detectado una posible intrusión o acceso no permitido al sistema operativ
 {rutas_txt}
 - Hora: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 """
+
     contrasena = "gdpnbpksefsnuqxh"
 
     msg = MIMEMultipart()
@@ -106,7 +107,13 @@ def monitorear_defensa():
 
                     exe_line = next((line for line in log.splitlines() if "exe=" in line), None)
                     if exe_line:
-                        recurso = exe_line.split("exe=")[-1].strip().split()[0]
+                        try:
+                            tokens = shlex.split(exe_line)
+                            for token in tokens:
+                                if token.startswith("exe="):
+                                    recurso = token.split("exe=")[-1]
+                        except Exception as e:
+                            print(f"[X] Error al procesar exe_line: {exe_line} | {e}")
 
                     addr_line = next((line for line in log.splitlines() if "addr=" in line), None)
                     if addr_line and "addr=" in addr_line:
@@ -114,16 +121,27 @@ def monitorear_defensa():
 
                     # Revisión de rutas accedidas
                     path_lines = [line for line in log.splitlines() if "name=" in line]
-                    paths_accedidos = [line.split("name=")[-1].strip().strip('"') for line in path_lines]
+                    paths_accedidos = []
+                    for line in path_lines:
+                        try:
+                            tokens = shlex.split(line)
+                            for token in tokens:
+                                if token.startswith("name="):
+                                    ruta = token.split("name=")[-1]
+                                    paths_accedidos.append(ruta)
+                        except Exception as e:
+                            print(f"[X] Error al procesar línea PATH: {line} | {e}")
                     accede_sitio_restringido = any(p in SITIOS_RESTRINGIDOS for p in paths_accedidos)
+
+                    if recurso == "/usr/bin/sudo":
+                        continue  # Ignora eventos que solo indican que se usó sudo
 
                     if accede_sitio_restringido or any(cmd in recurso for cmd in COMANDOS_PELIGROSOS):
                         print("[DEFENSA] Actividad sospechosa detectada.")
                         print(f"  ➤ Usuario: {usuario}")
                         print(f"  ➤ IP: {ip}")
                         print(f"  ➤ Recurso: {recurso}")
-                        print(f"  ➤ Rutas accedidas: {', '.join(paths_accedidos)}")
-                        registrar_log(usuario, ip, paths_accedidos)
+                        registrar_log(usuario, ip)
                         enviar_alerta_gmail(usuario, ip, recurso, paths_accedidos)
 
                     eventos_defensa.add(log)
