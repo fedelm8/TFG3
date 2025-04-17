@@ -36,13 +36,15 @@ def registrar_log(usuario, ip):
         print(f"[X] Error al escribir en el log: {e}")
 
 
+# ... (importaciones, constantes, etc. se mantienen igual) ...
+
 def enviar_alerta_gmail(usuario, ip, recurso, rutas_accedidas):
     remitente = "pruebasfede1111@gmail.com"
     receptor = "pruebasfede1111@gmail.com"
     asunto = "🚨 ALERTA DE SEGURIDAD: Acceso sospechoso al sistema"
     
     rutas_txt = "\n".join(f"  - {ruta}" for ruta in rutas_accedidas) if rutas_accedidas else "  - No determinado"
-    
+
     mensaje = f"""
 Se ha detectado una posible intrusión o acceso no permitido al sistema operativo.
 
@@ -119,28 +121,31 @@ def monitorear_defensa():
                     if addr_line and "addr=" in addr_line:
                         ip = addr_line.split("addr=")[-1].strip().split()[0]
 
-                    # Revisión de rutas accedidas
+                    # Extraer paths accedidos
                     path_lines = [line for line in log.splitlines() if "name=" in line]
                     paths_accedidos = []
                     for line in path_lines:
                         try:
-                            tokens = shlex.split(line)
-                            for token in tokens:
-                                if token.startswith("name="):
-                                    ruta = token.split("name=")[-1]
-                                    paths_accedidos.append(ruta)
+                            parts = line.split("name=")
+                            if len(parts) > 1:
+                                ruta = parts[1].split()[0].strip('"')
+                                paths_accedidos.append(ruta)
                         except Exception as e:
                             print(f"[X] Error al procesar línea PATH: {line} | {e}")
+
+                    print(f"[DEBUG] Paths accedidos: {paths_accedidos}")  # <- puedes quitar esto si ya va todo bien
+
                     accede_sitio_restringido = any(p in SITIOS_RESTRINGIDOS for p in paths_accedidos)
 
                     if recurso == "/usr/bin/sudo":
-                        continue  # Ignora eventos que solo indican que se usó sudo
+                        continue  # Ignora eventos solo de uso de sudo
 
                     if accede_sitio_restringido or any(cmd in recurso for cmd in COMANDOS_PELIGROSOS):
                         print("[DEFENSA] Actividad sospechosa detectada.")
                         print(f"  ➤ Usuario: {usuario}")
                         print(f"  ➤ IP: {ip}")
                         print(f"  ➤ Recurso: {recurso}")
+                        print(f"  ➤ Rutas accedidas: {paths_accedidos}")
                         registrar_log(usuario, ip)
                         enviar_alerta_gmail(usuario, ip, recurso, paths_accedidos)
 
@@ -150,7 +155,6 @@ def monitorear_defensa():
 
     except KeyboardInterrupt:
         print("\n[+] Monitor finalizado por el usuario. Cerrando...")
-
 
 if __name__ == "__main__":
     monitorear_defensa()
