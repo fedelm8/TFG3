@@ -6,6 +6,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import pwd  # Para traducir UID a nombre de usuario
+import shlex
 
 ARCHIVO = os.path.expanduser("/home/osboxes/Documents/tarjetas_bancarias.txt")
 CLAVE = "clave_defensa"
@@ -109,7 +110,16 @@ def monitorear_defensa():
 
                     # Revisión de rutas accedidas
                     path_lines = [line for line in log.splitlines() if "name=" in line]
-                    paths_accedidos = [line.split("name=")[-1].strip().strip('"') for line in path_lines]
+                    paths_accedidos = []
+                    for line in path_lines:
+                        try:
+                            tokens = shlex.split(line)
+                            for token in tokens:
+                                if token.startswith("name="):
+                                    ruta = token.split("name=")[-1]
+                                    paths_accedidos.append(ruta)
+                        except Exception as e:
+                            print(f"[X] Error al procesar línea PATH: {line} | {e}")
                     accede_sitio_restringido = any(p in SITIOS_RESTRINGIDOS for p in paths_accedidos)
 
                     if recurso == "/usr/bin/sudo":
