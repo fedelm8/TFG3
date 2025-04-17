@@ -102,7 +102,13 @@ def monitorear_defensa():
 
                     exe_line = next((line for line in log.splitlines() if "exe=" in line), None)
                     if exe_line:
-                        recurso = exe_line.split("exe=")[-1].strip().split()[0]
+                        try:
+                            tokens = shlex.split(exe_line)
+                            for token in tokens:
+                                if token.startswith("exe="):
+                                    recurso = token.split("exe=")[-1]
+                        except Exception as e:
+                            print(f"[X] Error al procesar exe_line: {exe_line} | {e}")
 
                     addr_line = next((line for line in log.splitlines() if "addr=" in line), None)
                     if addr_line and "addr=" in addr_line:
