@@ -111,7 +111,9 @@ def monitorear_defensa():
                     path_lines = [line for line in log.splitlines() if "name=" in line]
                     accede_sitio_restringido = any(any(path in line for path in SITIOS_RESTRINGIDOS) for line in path_lines)
 
-                
+                    if recurso == "/usr/bin/sudo":
+                        continue  # Ignora eventos que solo indican que se usó sudo
+                    
                     if accede_sitio_restringido or any(cmd in recurso for cmd in COMANDOS_PELIGROSOS):
                         print("[DEFENSA] Actividad sospechosa detectada.")
                         print(f"  ➤ Usuario: {usuario}")
