@@ -96,7 +96,6 @@ def monitorear_defensa():
     timestamp = datetime.now().strftime("%H:%M:%S")
     print(f"[*] Ignorando eventos anteriores a {timestamp}\n")
 
-
     try:
         while True:
             resultado = subprocess.run(
@@ -105,7 +104,6 @@ def monitorear_defensa():
             )
             logs = resultado.stdout.decode().split("\n\n")
 
-
             for log in logs:
                 if log and log not in eventos_defensa:
                     uid_line = next((line for line in log.splitlines() if "uid=" in line and "auid=" in line), None)
@@ -113,7 +111,6 @@ def monitorear_defensa():
                     usuario = "desconocido"
                     ip = "localhost"
                     recurso = "indeterminado"
-
 
                     if uid_line:
                         try:
@@ -125,7 +122,6 @@ def monitorear_defensa():
                         except:
                             pass
 
-
                     exe_line = next((line for line in log.splitlines() if "exe=" in line), None)
                     if exe_line:
                         try:
@@ -136,11 +132,9 @@ def monitorear_defensa():
                         except Exception as e:
                             print(f"[X] Error al procesar exe_line: {exe_line} | {e}")
 
-
                     addr_line = next((line for line in log.splitlines() if "addr=" in line), None)
                     if addr_line and "addr=" in addr_line:
                         ip = addr_line.split("addr=")[-1].strip().split()[0]
-
 
                     # Extraer paths accedidos
                     path_lines = [line for line in log.splitlines() if "name=" in line]
@@ -150,20 +144,20 @@ def monitorear_defensa():
                             parts = line.split("name=")
                             if len(parts) > 1:
                                 ruta = parts[1].split()[0].strip('"')
+                                ruta = os.path.normpath(ruta)
                                 paths_accedidos.append(ruta)
                         except Exception as e:
                             print(f"[X] Error al procesar línea PATH: {line} | {e}")
 
+                    print(f"[DEBUG] Paths accedidos: {paths_accedidos}")
 
-                    print(f"[DEBUG] Paths accedidos: {paths_accedidos}")  # <- puedes quitar esto si ya va todo bien
-
-
-                    accede_sitio_restringido = any(p in SITIOS_RESTRINGIDOS for p in paths_accedidos)
-
+                    accede_sitio_restringido = any(
+                        any(r in p for r in SITIOS_RESTRINGIDOS)
+                        for p in paths_accedidos
+                    )
 
                     if recurso == "/usr/bin/sudo":
-                        continue  # Ignora eventos solo de uso de sudo
-
+                        continue
 
                     if accede_sitio_restringido or any(cmd in recurso for cmd in COMANDOS_PELIGROSOS):
                         print("[DEFENSA] Actividad sospechosa detectada.")
@@ -174,16 +168,12 @@ def monitorear_defensa():
                         registrar_log(usuario, ip)
                         enviar_alerta_gmail(usuario, ip, recurso, paths_accedidos)
 
-
                     eventos_defensa.add(log)
-
 
             time.sleep(INTERVALO)
 
-
     except KeyboardInterrupt:
         print("\n[+] Monitor finalizado por el usuario. Cerrando...")
-
 
 if __name__ == "__main__":
     monitorear_defensa()
