@@ -1,30 +1,36 @@
 import subprocess
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import pwd
+import pwd  # Para traducir UID a nombre de usuario
 import shlex
+
 
 ARCHIVO = os.path.expanduser("/home/osboxes/Documents/tarjetas_bancarias.txt")
 CLAVE = "clave_defensa"
-INTERVALO = 2
+INTERVALO = 2  # Segundos entre chequeos
 SITIOS_RESTRINGIDOS = [
     "/etc/shadow", "/etc/passwd", "/etc/sudoers", "/root", "/boot", "/var/log",
-    "/bin/bash", "/dev/mem", "/proc/kcore", "/etc/ssh/sshd_config", "/etc/gshadow",
-    "/etc/group", "/etc/hosts.allow", "/etc/hosts.deny", "/etc/fstab", "/etc/rc.local",
-    "/etc/profile", "/etc/environment", "/etc/ld.so.conf", "/etc/sysctl.conf"
+    "/bin/bash", "/dev/mem", "/proc/kcore"
 ]
 COMANDOS_PELIGROSOS = ["nmap", "tcpdump", "netstat", "bash", "nc", "rm", "chmod 777", "curl", "wget", "scp"]
 
+
+# Ruta del log en carpeta 'logs' junto al script
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(BASE_DIR, "logs")
 LOG_PATH = os.path.join(LOG_DIR, "defense.log")
+
+
+# Crear carpeta logs si no existe
 os.makedirs(LOG_DIR, exist_ok=True)
 
+
 eventos_defensa = set()
+
 
 def registrar_log(usuario, ip):
     mensaje = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Usuario: {usuario} | IP: {ip}\n"
@@ -34,14 +40,23 @@ def registrar_log(usuario, ip):
     except Exception as e:
         print(f"[X] Error al escribir en el log: {e}")
 
+
+
+
+# ... (importaciones, constantes, etc. se mantienen igual) ...
+
+
 def enviar_alerta_gmail(usuario, ip, recurso, rutas_accedidas):
     remitente = "pruebasfede1111@gmail.com"
     receptor = "pruebasfede1111@gmail.com"
     asunto = "🚨 ALERTA DE SEGURIDAD: Acceso sospechoso al sistema"
+   
     rutas_txt = "\n".join(f"  - {ruta}" for ruta in rutas_accedidas) if rutas_accedidas else "  - No determinado"
+
 
     mensaje = f"""
 Se ha detectado una posible intrusión o acceso no permitido al sistema operativo.
+
 
 🔍 Detalles:
 - Usuario: {usuario}
@@ -52,12 +67,16 @@ Se ha detectado una posible intrusión o acceso no permitido al sistema operativ
 - Hora: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 """
 
+
     contrasena = "owbjrlluueabmpbf"
+
+
     msg = MIMEMultipart()
     msg["From"] = remitente
     msg["To"] = receptor
     msg["Subject"] = asunto
     msg.attach(MIMEText(mensaje, "plain"))
+
 
     try:
         servidor = smtplib.SMTP("smtp.gmail.com", 587)
@@ -69,18 +88,23 @@ Se ha detectado una posible intrusión o acceso no permitido al sistema operativ
     except Exception as e:
         print(f"[X] Error al enviar correo: {e}")
 
+
+
+
 def monitorear_defensa():
     print(f"[*] Defensa activa. Monitorizando accesos peligrosos...")
-    print(f"[*] Ignorando eventos anteriores a los últimos segundos\n")
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    print(f"[*] Ignorando eventos anteriores a {timestamp}\n")
+
 
     try:
         while True:
-            ts_inicio = (datetime.now() - timedelta(seconds=5)).strftime("%Y-%m-%d %H:%M:%S")
             resultado = subprocess.run(
-                ["ausearch", "-k", CLAVE, "-ts", ts_inicio, "--format", "raw"],
+                ["ausearch", "-k", CLAVE, "-ts", timestamp, "--format", "raw"],
                 stdout=subprocess.PIPE
             )
             logs = resultado.stdout.decode().split("\n\n")
+
 
             for log in logs:
                 if log and log not in eventos_defensa:
@@ -89,6 +113,7 @@ def monitorear_defensa():
                     usuario = "desconocido"
                     ip = "localhost"
                     recurso = "indeterminado"
+
 
                     if uid_line:
                         try:
@@ -100,6 +125,7 @@ def monitorear_defensa():
                         except:
                             pass
 
+
                     exe_line = next((line for line in log.splitlines() if "exe=" in line), None)
                     if exe_line:
                         try:
@@ -110,10 +136,13 @@ def monitorear_defensa():
                         except Exception as e:
                             print(f"[X] Error al procesar exe_line: {exe_line} | {e}")
 
+
                     addr_line = next((line for line in log.splitlines() if "addr=" in line), None)
                     if addr_line and "addr=" in addr_line:
                         ip = addr_line.split("addr=")[-1].strip().split()[0]
 
+
+                    # Extraer paths accedidos
                     path_lines = [line for line in log.splitlines() if "name=" in line]
                     paths_accedidos = []
                     for line in path_lines:
@@ -125,10 +154,16 @@ def monitorear_defensa():
                         except Exception as e:
                             print(f"[X] Error al procesar línea PATH: {line} | {e}")
 
+
+                    print(f"[DEBUG] Paths accedidos: {paths_accedidos}")  # <- puedes quitar esto si ya va todo bien
+
+
                     accede_sitio_restringido = any(p in SITIOS_RESTRINGIDOS for p in paths_accedidos)
 
+
                     if recurso == "/usr/bin/sudo":
-                        continue
+                        continue  # Ignora eventos solo de uso de sudo
+
 
                     if accede_sitio_restringido or any(cmd in recurso for cmd in COMANDOS_PELIGROSOS):
                         print("[DEFENSA] Actividad sospechosa detectada.")
@@ -139,12 +174,16 @@ def monitorear_defensa():
                         registrar_log(usuario, ip)
                         enviar_alerta_gmail(usuario, ip, recurso, paths_accedidos)
 
+
                     eventos_defensa.add(log)
+
 
             time.sleep(INTERVALO)
 
+
     except KeyboardInterrupt:
         print("\n[+] Monitor finalizado por el usuario. Cerrando...")
+
 
 if __name__ == "__main__":
     monitorear_defensa()
