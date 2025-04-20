@@ -4,7 +4,7 @@ After=network.target auditd.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /opt/monitor_defense/defense_system.py
+ExecStart=/usr/bin/python3 /opt/defense_archivo/defense_system.py
 Restart=on-failure
 User=root
 Group=root
