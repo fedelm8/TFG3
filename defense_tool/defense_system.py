@@ -11,6 +11,15 @@ ARCHIVOS_PELIGROSOS = ["/etc/shadow", "/etc/passwd", "/etc/sudoers"]
 CLAVE = "clave_defensa"
 INTERVALO = 2
 
+PROCESOS_PERMITIDOS = {
+    "gdm-session-worker",
+    "login",
+    "sudo",
+    "sshd",
+    "polkitd",
+    "systemd",
+}
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(BASE_DIR, "logs")
 LOG_PATH = os.path.join(LOG_DIR, "accesos.log")
@@ -69,6 +78,10 @@ def proteger_archivo(ruta):
 
 def monitorear():
     print("[*] Defensa activa. Monitorizando accesos peligrosos...\n")
+
+    print("[*] Esperando a que el sistema se estabilice...")
+    time.sleep(10)
+
     timestamp = datetime.now().strftime("%H:%M:%S")
     print(f"[*] Ignorando eventos anteriores a {timestamp}\n")
 
@@ -88,6 +101,8 @@ def monitorear():
                     uid = "desconocido"
                     usuario = "desconocido"
                     ip = "localhost"
+                    estado = "DESCONOCIDO"
+                    proceso = "desconocido"
 
                     for line in log.splitlines():
                         if "name=" in line:
@@ -113,6 +128,14 @@ def monitorear():
 
                         if "addr=" in line:
                             ip = line.split("addr=")[-1].split()[0]
+
+                        if "comm=" in line:
+                            proceso = line.split("comm=")[-1].strip().strip('"')
+
+                    # Verificar si es un proceso permitido
+                    if proceso in PROCESOS_PERMITIDOS:
+                        print(f"[IGNORADO] Proceso seguro: {proceso} | Usuario: {usuario} | Ruta: \"{ruta}\"")
+                        continue
 
                     print(f"[{estado}] Usuario: {usuario} | Ruta: \"{ruta}\"")
                     registrar_log(usuario, ip, ruta, estado)
