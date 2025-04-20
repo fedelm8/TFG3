@@ -54,7 +54,7 @@ Se ha detectado un {estado.lower()} de acceso a un archivo sensible.
 - Hora: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 """
 
-    contrasena = "pddcqheuxehilvay"  # <- contraseña de aplicación
+    contrasena = "owbjrlluueabmpbf"  # <- contraseña de aplicación
 
     msg = MIMEMultipart()
     msg["From"] = remitente
