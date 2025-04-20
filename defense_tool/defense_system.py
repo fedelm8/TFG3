@@ -7,38 +7,42 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import pwd
 
+ARCHIVOS_PELIGROSOS = ["/etc/shadow", "/etc/passwd", "/etc/sudoers"]
 CLAVE = "clave_defensa"
-INTERVALO = 2  # segundos
-RUTAS_PROTEGIDAS = ["/etc/shadow", "/etc/gshadow", "/etc/passwd"]
-ARCHIVO_BLOQUEO = "/etc/shadow"  # como referencia para aplicar permisos
+INTERVALO = 2
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LOG_PATH = os.path.join(BASE_DIR, "logs", "accesos.log")
-os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
+LOG_DIR = os.path.join(BASE_DIR, "logs")
+LOG_PATH = os.path.join(LOG_DIR, "accesos.log")
+
+os.makedirs(LOG_DIR, exist_ok=True)
+
 eventos_detectados = set()
 
 def registrar_log(usuario, ip, ruta, estado):
-    mensaje = f"[{datetime.now()}] {estado} | Usuario: {usuario} | IP: {ip} | Ruta: {ruta}\n"
+    mensaje = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {estado} | Usuario: {usuario} | IP: {ip} | Ruta: \"{ruta}\"\n"
     try:
-        with open(LOG_PATH, "a") as log:
-            log.write(mensaje)
+        with open(LOG_PATH, "a") as log_file:
+            log_file.write(mensaje)
     except Exception as e:
-        print(f"[X] Error al escribir log: {e}")
+        print(f"[X] Error al escribir en el log: {e}")
 
-def enviar_alerta(usuario, ip, ruta, estado):
+def enviar_alerta_gmail(usuario, ip, ruta, estado):
     remitente = "pruebasfede1111@gmail.com"
     receptor = "pruebasfede1111@gmail.com"
-    asunto = f"⚠️ ALERTA DE SEGURIDAD: {estado}"
-    mensaje = f"""
-Se ha detectado un intento de acceso al sistema.
+    asunto = f"ALERTA: {estado} a archivo sensible"
 
-🔐 Estado: {estado}
-👤 Usuario: {usuario}
-📍 IP: {ip}
-📂 Archivo/Comando: {ruta}
-🕒 Hora: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+    mensaje = f"""
+Se ha detectado un {estado.lower()} de acceso a un archivo sensible.
+
+🔍 Detalles:
+- Usuario: {usuario}
+- IP: {ip}
+- Ruta: {ruta}
+- Hora: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 """
 
-    contrasena = "owbjrlluueabmpbf"
+    contrasena = "owbjrlluueabmpbf"  # <- contraseña de aplicación
 
     msg = MIMEMultipart()
     msg["From"] = remitente
@@ -56,12 +60,12 @@ Se ha detectado un intento de acceso al sistema.
     except Exception as e:
         print(f"[X] Error al enviar correo: {e}")
 
-def bloquear_archivo():
+def proteger_archivo(ruta):
     try:
-        os.chmod(ARCHIVO_BLOQUEO, 0o000)
-        print("[BLOQUEO] Archivo protegido temporalmente.")
+        os.chmod(ruta, 0o000)
+        print(f"[BLOQUEO] Archivo protegido temporalmente: {ruta}")
     except Exception as e:
-        print(f"[X] Error al bloquear archivo: {e}")
+        print(f"[X] Error al bloquear el archivo: {e}")
 
 def monitorear():
     print("[*] Defensa activa. Monitorizando accesos peligrosos...\n")
@@ -77,32 +81,47 @@ def monitorear():
             logs = resultado.stdout.decode().split("\n\n")
 
             for log in logs:
-                if not log or log in eventos_detectados:
-                    continue
+                if log and log not in eventos_detectados:
+                    ruta = "desconocida"
+                    uid = "desconocido"
+                    usuario = "desconocido"
+                    ip = "localhost"
 
-                ruta_line = next((l for l in log.splitlines() if "name=" in l), None)
-                ruta = ruta_line.split("name=")[-1].strip().split()[0] if ruta_line else "desconocido"
+                    for line in log.splitlines():
+                        if "name=" in line:
+                            for archivo in ARCHIVOS_PELIGROSOS:
+                                if f'name="{archivo}"' in line:
+                                    ruta = archivo
+                                    break
 
-                uid_line = next((l for l in log.splitlines() if "uid=" in l and "auid=" in l), "")
-                uid = int(uid_line.split("uid=")[1].split()[0]) if "uid=" in uid_line else 0
-                usuario = pwd.getpwuid(uid).pw_name if uid else "desconocido"
+                        if "type=SYSCALL" in line and "success=" in line:
+                            partes = line.split()
+                            success_val = next((p for p in partes if p.startswith("success=")), "")
+                            estado = "INTENTO EXITOSO" if success_val == "success=yes" else "INTENTO FALLIDO"
 
-                ip_line = next((l for l in log.splitlines() if "addr=" in l), "")
-                ip = ip_line.split("addr=")[-1].split()[0] if "addr=" in ip_line else "localhost"
+                        if "uid=" in line and "auid=" in line:
+                            try:
+                                partes = line.split()
+                                for parte in partes:
+                                    if parte.startswith("uid="):
+                                        uid = int(parte.split("=")[1])
+                                        usuario = pwd.getpwuid(uid).pw_name
+                            except:
+                                pass
 
-                success_line = next((l for l in log.splitlines() if "success=" in l), "")
-                estado = "INTENTO EXITOSO" if "success=yes" in success_line else "INTENTO FALLIDO"
+                        if "addr=" in line:
+                            ip = line.split("addr=")[-1].split()[0]
 
-                print(f"[{estado}] Usuario: {usuario} | Ruta: {ruta}")
-                registrar_log(usuario, ip, ruta, estado)
-                enviar_alerta(usuario, ip, ruta, estado)
-                bloquear_archivo()
-                eventos_detectados.add(log)
+                    print(f"[{estado}] Usuario: {usuario} | Ruta: \"{ruta}\"")
+                    registrar_log(usuario, ip, ruta, estado)
+                    proteger_archivo(ruta)
+                    enviar_alerta_gmail(usuario, ip, ruta, estado)
+                    eventos_detectados.add(log)
 
             time.sleep(INTERVALO)
 
     except KeyboardInterrupt:
-        print("\n[+] Defensa desactivada. Saliendo...")
+        print("\n[+] Monitor finalizado por el usuario. Cerrando...")
 
 if __name__ == "__main__":
     monitorear()
