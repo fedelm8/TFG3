@@ -21,15 +21,15 @@ os.makedirs(LOG_DIR, exist_ok=True)
 
 eventos_detectados = set()
 
-def registrar_log(usuario, ip, ruta, estado, comando):
-    mensaje = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {estado} | Usuario: {usuario} | IP: {ip} | Ruta: \"{ruta}\" | Comando: \"{comando}\"\n"
+def registrar_log(usuario, ip, ruta, estado):
+    mensaje = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {estado} | Usuario: {usuario} | IP: {ip} | Ruta: \"{ruta}\"\n"
     try:
         with open(LOG_PATH, "a") as log_file:
             log_file.write(mensaje)
     except Exception as e:
         print(f"[X] Error al escribir en el log: {e}")
 
-def enviar_alerta_gmail(usuario, ip, ruta, estado, comando):
+def enviar_alerta_gmail(usuario, ip, ruta, estado):
     remitente = "pruebasfede1111@gmail.com"
     receptor = "pruebasfede1111@gmail.com"
     asunto = f"ALERTA: {estado} a archivo sensible"
@@ -41,7 +41,6 @@ Se ha detectado un {estado.lower()} de acceso a un archivo sensible.
 - Usuario: {usuario}
 - IP: {ip}
 - Ruta: {ruta}
-- Comando ejecutado: {comando}
 - Hora: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 """
 
@@ -104,7 +103,6 @@ def monitorear():
                     usuario = "desconocido"
                     ip = "localhost"
                     estado = "DESCONOCIDO"
-                    comando = "desconocido"  # Añadimos la variable comando
 
                     for line in log.splitlines():
                         if "name=" in line:
@@ -131,9 +129,6 @@ def monitorear():
                         if "addr=" in line:
                             ip = line.split("addr=")[-1].split()[0]
 
-                        if "proctitle=" in line:  # Capturamos el comando ejecutado
-                            comando = line.split("proctitle=")[-1]
-
                     # Comprobar si el evento ocurrió durante el tiempo de arranque
                     tiempo_actual = time.time()
                     if tiempo_actual - tiempo_arranque < ARRANQUE_TEMPRANO_SEGUNDOS:
@@ -145,10 +140,10 @@ def monitorear():
                     if evento_id in eventos_detectados:
                         continue
 
-                    print(f"[{estado}] Usuario: {usuario} | Ruta: \"{ruta}\" | Comando: \"{comando}\"")
-                    registrar_log(usuario, ip, ruta, estado, comando)
+                    print(f"[{estado}] Usuario: {usuario} | Ruta: \"{ruta}\"")
+                    registrar_log(usuario, ip, ruta, estado)
                     proteger_archivo(ruta)
-                    enviar_alerta_gmail(usuario, ip, ruta, estado, comando)
+                    enviar_alerta_gmail(usuario, ip, ruta, estado)
                     eventos_detectados.add(evento_id)
 
             time.sleep(INTERVALO)
