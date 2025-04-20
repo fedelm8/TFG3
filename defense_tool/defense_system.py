@@ -85,8 +85,9 @@ Se ha detectado una posible intrusión o acceso no permitido al sistema operativ
 
 def monitorear_defensa():
     print(f"[*] Defensa activa. Monitorizando accesos peligrosos...")
-    timestamp = datetime.now().strftime("%H:%M:%S")
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[*] Ignorando eventos anteriores a {timestamp}\n")
+    time.sleep(1)
 
     try:
         while True:
