@@ -30,7 +30,7 @@ _Built with the tools and technologies:_
 The core features include:
 
 - 🔐 **Real-time Monitoring**: Instantly detects unauthorized access attempts to sensitive files such as /etc/shadow, /etc/passwd, /etc/sudoers.
-- 🚨 **Alerts**: Automatically notifies administrators through email when a sensitive file is accessed, providing detailed information about the event, such as the user, IP address, file path, and the command executed.
+- 🚨 **Alerts**: Automatically notifies administrators through email when a sensitive file is accessed, providing detailed information about the event, such as the user, IP address and the file path.
 - 🔄 **Continuous Operation**: Runs as a background service, ensuring that monitoring continues even after system reboots or restarts, providing uninterrupted protection.
 - 👤 **User Logging**: Records detailed logs of the access events, capturing user information and IP addresses for accountability, traceability, and audit purposes.
 - ⚙️ **Systemd Integration**: Simplifies deployment and management by seamlessly integrating with systemd for automatic startup and easy service management on Linux systems.
