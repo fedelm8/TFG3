@@ -72,6 +72,8 @@ def monitorear():
     timestamp = datetime.now().strftime("%H:%M:%S")
     print(f"[*] Ignorando eventos anteriores a {timestamp}\n")
 
+    time.sleep(1.2)
+
     try:
         while True:
             resultado = subprocess.run(
