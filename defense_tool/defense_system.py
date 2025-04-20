@@ -28,6 +28,9 @@ os.makedirs(LOG_DIR, exist_ok=True)
 
 eventos_detectados = set()
 
+timestamp_inicio = datetime.now().strftime("%H:%M:%S")
+print(f"[*] Ignorando eventos anteriores a {timestamp_inicio}\n")
+
 def registrar_log(usuario, ip, ruta, estado):
     mensaje = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {estado} | Usuario: {usuario} | IP: {ip} | Ruta: \"{ruta}\"\n"
     try:
@@ -95,6 +98,8 @@ def monitorear():
             )
             logs = resultado.stdout.decode().split("\n\n")
 
+            
+
             for log in logs:
                 if log and log not in eventos_detectados:
                     ruta = "desconocida"
@@ -103,6 +108,9 @@ def monitorear():
                     ip = "localhost"
                     estado = "DESCONOCIDO"
                     proceso = "desconocido"
+
+                    if f"audit({timestamp_inicio}" not in log:
+                        continue
 
                     for line in log.splitlines():
                         if "name=" in line:
@@ -136,6 +144,10 @@ def monitorear():
                     if proceso in PROCESOS_PERMITIDOS:
                         print(f"[IGNORADO] Proceso seguro: {proceso} | Usuario: {usuario} | Ruta: \"{ruta}\"")
                         continue
+
+                    #if usuario == "root" and ruta == "/etc/shadow":
+                     #   print(f"[IGNORADO] Acceso esperado de root a /etc/shadow durante el arranque: {usuario} | Ruta: \"{ruta}\"")
+                      #  continue
 
                     print(f"[{estado}] Usuario: {usuario} | Ruta: \"{ruta}\"")
                     registrar_log(usuario, ip, ruta, estado)
