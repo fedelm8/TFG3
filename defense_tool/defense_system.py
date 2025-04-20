@@ -85,90 +85,100 @@ Se ha detectado una posible intrusión o acceso no permitido al sistema operativ
 
 def monitorear_defensa():
     print(f"[*] Defensa activa. Monitorizando accesos peligrosos...")
-    timestamp = datetime.now().strftime("%H:%M:%S")
-    print(f"[*] Ignorando eventos anteriores a {timestamp}\n")
+
+    # Timestamp como datetime real
+    timestamp = datetime.now()
+    print(f"[*] Ignorando eventos anteriores a {timestamp.strftime('%H:%M:%S')}\n")
+    time.sleep(1)  # Espera mínima para evitar capturar eventos que coincidan con el arranque
 
     try:
         while True:
             resultado = subprocess.run(
-                ["ausearch", "-k", CLAVE, "-ts", timestamp, "--format", "raw"],
+                ["ausearch", "-k", CLAVE, "-ts", timestamp.strftime("%H:%M:%S"), "--format", "raw"],
                 stdout=subprocess.PIPE
             )
             logs = resultado.stdout.decode().split("\n\n")
 
             for log in logs:
-                if log and log not in eventos_defensa:
-                    uid_line = next((line for line in log.splitlines() if "uid=" in line and "auid=" in line), None)
-                    uid = "desconocido"
-                    usuario = "desconocido"
-                    ip = "localhost"
-                    recurso = "indeterminado"
+                if not log or log in eventos_defensa:
+                    continue
 
-                    if uid_line:
-                        try:
-                            partes = uid_line.split()
-                            for parte in partes:
-                                if parte.startswith("uid="):
-                                    uid = int(parte.split("=")[1])
-                                    usuario = pwd.getpwuid(uid).pw_name
-                        except:
-                            pass
+                # ⚠️ NUEVO: filtrar eventos anteriores al timestamp real
+                time_line = next((line for line in log.splitlines() if "time->" in line), None)
+                if time_line:
+                    try:
+                        time_str = time_line.split("time->")[-1].strip()
+                        event_time = datetime.strptime(time_str, "%H:%M:%S")
+                        if event_time < timestamp:
+                            continue
+                    except Exception as e:
+                        print(f"[X] Error al parsear time: {time_line} | {e}")
 
-                    exe_line = next((line for line in log.splitlines() if "exe=" in line), None)
-                    if exe_line:
-                        try:
-                            tokens = shlex.split(exe_line)
-                            for token in tokens:
-                                if token.startswith("exe="):
-                                    recurso = token.split("exe=")[-1]
-                        except Exception as e:
-                            print(f"[X] Error al procesar exe_line: {exe_line} | {e}")
+                uid_line = next((line for line in log.splitlines() if "uid=" in line and "auid=" in line), None)
+                uid = "desconocido"
+                usuario = "desconocido"
+                ip = "localhost"
+                recurso = "indeterminado"
 
-                    addr_line = next((line for line in log.splitlines() if "addr=" in line), None)
-                    if addr_line and "addr=" in addr_line:
-                        ip = addr_line.split("addr=")[-1].strip().split()[0]
+                if uid_line:
+                    try:
+                        partes = uid_line.split()
+                        for parte in partes:
+                            if parte.startswith("uid="):
+                                uid = int(parte.split("=")[1])
+                                usuario = pwd.getpwuid(uid).pw_name
+                    except:
+                        pass
 
-                    # Extraer paths accedidos
-                    path_lines = [line for line in log.splitlines() if "name=" in line]
-                    paths_accedidos = []
-                    for line in path_lines:
-                        try:
-                            parts = line.split("name=")
-                            if len(parts) > 1:
-                                ruta = parts[1].split()[0].strip('"')
-                                paths_accedidos.append(ruta)
-                        except Exception as e:
-                            print(f"[X] Error al procesar línea PATH: {line} | {e}")
+                exe_line = next((line for line in log.splitlines() if "exe=" in line), None)
+                if exe_line:
+                    try:
+                        tokens = shlex.split(exe_line)
+                        for token in tokens:
+                            if token.startswith("exe="):
+                                recurso = token.split("exe=")[-1]
+                    except Exception as e:
+                        print(f"[X] Error al procesar exe_line: {exe_line} | {e}")
 
-                    print(f"[DEBUG] Paths accedidos: {paths_accedidos}")  # <- puedes quitar esto si ya va todo bien
+                addr_line = next((line for line in log.splitlines() if "addr=" in line), None)
+                if addr_line and "addr=" in addr_line:
+                    ip = addr_line.split("addr=")[-1].strip().split()[0]
 
-                    accede_sitio_restringido = any(p in SITIOS_RESTRINGIDOS for p in paths_accedidos)
+                # Extraer paths accedidos
+                path_lines = [line for line in log.splitlines() if "name=" in line]
+                paths_accedidos = []
+                for line in path_lines:
+                    try:
+                        parts = line.split("name=")
+                        if len(parts) > 1:
+                            ruta = parts[1].split()[0].strip('"')
+                            paths_accedidos.append(ruta)
+                    except Exception as e:
+                        print(f"[X] Error al procesar línea PATH: {line} | {e}")
 
-                    RECURSOS_LEGITIMOS = [
-                        "/usr/bin/sudo",
-                        "/usr/libexec/gdm-session-worker",
-                        "/usr/sbin/unix_chkpwd",
-                        "/usr/bin/passwd"
-                    ]
+                print(f"[DEBUG] Paths accedidos: {paths_accedidos}")
 
-                    if recurso in RECURSOS_LEGITIMOS:
-                        continue
+                accede_sitio_restringido = any(p in SITIOS_RESTRINGIDOS for p in paths_accedidos)
 
-                    if accede_sitio_restringido or any(cmd in recurso for cmd in COMANDOS_PELIGROSOS):
-                        print("[DEFENSA] Actividad sospechosa detectada.")
-                        print(f"  ➤ Usuario: {usuario}")
-                        print(f"  ➤ IP: {ip}")
-                        print(f"  ➤ Recurso: {recurso}")
-                        print(f"  ➤ Rutas accedidas: {paths_accedidos}")
-                        registrar_log(usuario, ip)
-                        enviar_alerta_gmail(usuario, ip, recurso, paths_accedidos)
+                if recurso == "/usr/bin/sudo":
+                    continue  # Ignora eventos solo de uso de sudo
 
-                    eventos_defensa.add(log)
+                if accede_sitio_restringido or any(cmd in recurso for cmd in COMANDOS_PELIGROSOS):
+                    print("[DEFENSA] Actividad sospechosa detectada.")
+                    print(f"  ➤ Usuario: {usuario}")
+                    print(f"  ➤ IP: {ip}")
+                    print(f"  ➤ Recurso: {recurso}")
+                    print(f"  ➤ Rutas accedidas: {paths_accedidos}")
+                    registrar_log(usuario, ip)
+                    enviar_alerta_gmail(usuario, ip, recurso, paths_accedidos)
+
+                eventos_defensa.add(log)
 
             time.sleep(INTERVALO)
 
     except KeyboardInterrupt:
         print("\n[+] Monitor finalizado por el usuario. Cerrando...")
+
 
 if __name__ == "__main__":
     monitorear_defensa()
