@@ -63,6 +63,9 @@ Se ha detectado un {estado.lower()} de acceso a un archivo sensible.
 def obtener_tiempo_arranque():
     return psutil.boot_time()
 
+# (todo tu import y setup inicial se mantiene igual)
+# ...
+
 def monitorear():
     print("[*] Defensa activa. Monitorizando accesos peligrosos...\n")
     print("[*] Esperando a que el sistema se estabilice...")
@@ -87,7 +90,6 @@ def monitorear():
                     uid = "desconocido"
                     usuario = "desconocido"
                     ip = "localhost"
-                    estado = "DESCONOCIDO"
 
                     for line in log.splitlines():
                         if "name=" in line:
@@ -95,11 +97,6 @@ def monitorear():
                                 if f'name="{archivo}"' in line:
                                     ruta = archivo
                                     break
-
-                        if "type=SYSCALL" in line and "success=" in line:
-                            partes = line.split()
-                            success_val = next((p for p in partes if p.startswith("success=")), "")
-                            estado = "INTENTO EXITOSO" if success_val == "success=yes" else "INTENTO FALLIDO"
 
                         if "uid=" in line and "auid=" in line:
                             try:
@@ -114,21 +111,18 @@ def monitorear():
                         if "addr=" in line:
                             ip = line.split("addr=")[-1].split()[0]
 
-                    # **Ignorar accesos de root (uid=0) y del sistema**
-                    if uid == 0:
+                    if usuario == "root":
                         continue
 
-                    # Comprobar si el evento ocurrió durante el tiempo de arranque
                     tiempo_actual = time.time()
                     if tiempo_actual - tiempo_arranque < ARRANQUE_TEMPRANO_SEGUNDOS:
                         print(f"[IGNORADO] Acceso durante el arranque: {usuario} | Ruta: \"{ruta}\"")
                         continue
 
-                    # Solo enviamos alerta si el acceso fue a un archivo peligroso por un usuario normal
                     if usuario != "root" and ruta in ARCHIVOS_PELIGROSOS:
                         print(f"[ALERTA] Intento de acceso a archivo sensible: {usuario} | Ruta: \"{ruta}\"")
-                        registrar_log(usuario, ip, ruta, estado)
-                        enviar_alerta_gmail(usuario, ip, ruta, estado)
+                        registrar_log(usuario, ip, ruta, "INTENTO DE ACCESO")
+                        enviar_alerta_gmail(usuario, ip, ruta, "INTENTO DE ACCESO")
 
             time.sleep(INTERVALO)
 
