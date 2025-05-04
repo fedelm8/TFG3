@@ -136,15 +136,17 @@ def monitorear():
                         continue
 
                     # Verificar si el evento ya ha sido registrado
-                    #evento_id = f"{usuario}-{ruta}-{ip}"
-                    #if evento_id in eventos_detectados:
-                     #   continue
+                    timestamp_evento = datetime.now().strftime("%Y%m%d%H%M%S")
+                    evento_id = f"{usuario}-{ruta}-{ip}-{timestamp_evento}"
+
+                    if evento_id in eventos_detectados:
+                        continue
 
                     print(f"[{estado}] Usuario: {usuario} | Ruta: \"{ruta}\"")
                     registrar_log(usuario, ip, ruta, estado)
                     proteger_archivo(ruta)
                     enviar_alerta_gmail(usuario, ip, ruta, estado)
-                    #eventos_detectados.add(evento_id)
+                    eventos_detectados.add(evento_id)
 
             time.sleep(INTERVALO)
 
