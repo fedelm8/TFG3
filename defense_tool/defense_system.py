@@ -136,9 +136,7 @@ def monitorear():
                         continue
 
                     # Verificar si el evento ya ha sido registrado
-                    timestamp_evento = datetime.now().strftime("%Y%m%d%H%M%S")
-                    evento_id = f"{usuario}-{ruta}-{ip}-{timestamp_evento}"
-
+                    evento_id = f"{usuario}-{ruta}-{ip}"
                     if evento_id in eventos_detectados:
                         continue
 
