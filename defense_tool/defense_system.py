@@ -6,18 +6,20 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import pwd
-import psutil
+import psutil  # Necesitamos psutil para obtener el tiempo de arranque
 
 ARCHIVOS_PELIGROSOS = ["/etc/shadow", "/etc/passwd", "/etc/sudoers"]
 CLAVE = "clave_defensa"
 INTERVALO = 2
-ARRANQUE_TEMPRANO_SEGUNDOS = 30
+ARRANQUE_TEMPRANO_SEGUNDOS = 30  # Tiempo en segundos para ignorar eventos de arranque
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(BASE_DIR, "logs")
 LOG_PATH = os.path.join(LOG_DIR, "accesos.log")
 
 os.makedirs(LOG_DIR, exist_ok=True)
+
+eventos_detectados = set()
 
 def registrar_log(usuario, ip, ruta, estado):
     mensaje = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {estado} | Usuario: {usuario} | IP: {ip} | Ruta: \"{ruta}\"\n"
@@ -42,7 +44,7 @@ Se ha detectado un {estado.lower()} de acceso a un archivo sensible.
 - Hora: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 """
 
-    contrasena = "pddcqheuxehilvay"  # contraseña de aplicación
+    contrasena = "pddcqheuxehilvay"  # <- contraseña de aplicación
 
     msg = MIMEMultipart()
     msg["From"] = remitente
@@ -60,20 +62,30 @@ Se ha detectado un {estado.lower()} de acceso a un archivo sensible.
     except Exception as e:
         print(f"[X] Error al enviar correo: {e}")
 
-def obtener_tiempo_arranque():
-    return psutil.boot_time()
+def proteger_archivo(ruta):
+    try:
+        os.chmod(ruta, 0o000)
+        print(f"[BLOQUEO] Archivo protegido temporalmente: {ruta}")
+    except Exception as e:
+        print(f"[X] Error al bloquear el archivo: {e}")
 
-# (todo tu import y setup inicial se mantiene igual)
-# ...
+def obtener_tiempo_arranque():
+    """Obtiene el tiempo de arranque del sistema en segundos."""
+    boot_time = psutil.boot_time()
+    return boot_time
 
 def monitorear():
     print("[*] Defensa activa. Monitorizando accesos peligrosos...\n")
+
     print("[*] Esperando a que el sistema se estabilice...")
     time.sleep(10)
 
+    # Obtener el tiempo de arranque del sistema
     tiempo_arranque = obtener_tiempo_arranque()
+
     timestamp = datetime.now().strftime("%H:%M:%S")
     print(f"[*] Ignorando eventos anteriores a {timestamp}\n")
+
     time.sleep(1.2)
 
     try:
@@ -85,11 +97,12 @@ def monitorear():
             logs = resultado.stdout.decode().split("\n\n")
 
             for log in logs:
-                if log:
+                if log and log not in eventos_detectados:
                     ruta = "desconocida"
                     uid = "desconocido"
                     usuario = "desconocido"
                     ip = "localhost"
+                    estado = "DESCONOCIDO"
 
                     for line in log.splitlines():
                         if "name=" in line:
@@ -97,6 +110,11 @@ def monitorear():
                                 if f'name="{archivo}"' in line:
                                     ruta = archivo
                                     break
+
+                        if "type=SYSCALL" in line and "success=" in line:
+                            partes = line.split()
+                            success_val = next((p for p in partes if p.startswith("success=")), "")
+                            estado = "INTENTO EXITOSO" if success_val == "success=yes" else "INTENTO FALLIDO"
 
                         if "uid=" in line and "auid=" in line:
                             try:
@@ -111,18 +129,22 @@ def monitorear():
                         if "addr=" in line:
                             ip = line.split("addr=")[-1].split()[0]
 
-                    if usuario == "root":
-                        continue
-
+                    # Comprobar si el evento ocurrió durante el tiempo de arranque
                     tiempo_actual = time.time()
                     if tiempo_actual - tiempo_arranque < ARRANQUE_TEMPRANO_SEGUNDOS:
                         print(f"[IGNORADO] Acceso durante el arranque: {usuario} | Ruta: \"{ruta}\"")
                         continue
 
-                    if usuario != "root" and ruta in ARCHIVOS_PELIGROSOS:
-                        print(f"[ALERTA] Intento de acceso a archivo sensible: {usuario} | Ruta: \"{ruta}\"")
-                        registrar_log(usuario, ip, ruta, "INTENTO DE ACCESO")
-                        enviar_alerta_gmail(usuario, ip, ruta, "INTENTO DE ACCESO")
+                    # Verificar si el evento ya ha sido registrado
+                    evento_id = f"{usuario}-{ruta}-{ip}"
+                    if evento_id in eventos_detectados:
+                        continue
+
+                    print(f"[{estado}] Usuario: {usuario} | Ruta: \"{ruta}\"")
+                    registrar_log(usuario, ip, ruta, estado)
+                    proteger_archivo(ruta)
+                    enviar_alerta_gmail(usuario, ip, ruta, estado)
+                    eventos_detectados.add(evento_id)
 
             time.sleep(INTERVALO)
 
