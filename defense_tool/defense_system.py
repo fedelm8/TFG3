@@ -60,13 +60,6 @@ Se ha detectado un {estado.lower()} de acceso a un archivo sensible.
     except Exception as e:
         print(f"[X] Error al enviar correo: {e}")
 
-def proteger_archivo(ruta):
-    try:
-        os.chmod(ruta, 0o000)
-        print(f"[BLOQUEO] Archivo protegido temporalmente: {ruta}")
-    except Exception as e:
-        print(f"[X] Error al bloquear el archivo: {e}")
-
 def obtener_tiempo_arranque():
     return psutil.boot_time()
 
@@ -121,7 +114,7 @@ def monitorear():
                         if "addr=" in line:
                             ip = line.split("addr=")[-1].split()[0]
 
-                    # **Ignorar accesos de root (uid=0)**
+                    # **Ignorar accesos de root (uid=0) y del sistema**
                     if uid == 0:
                         continue
 
@@ -131,10 +124,11 @@ def monitorear():
                         print(f"[IGNORADO] Acceso durante el arranque: {usuario} | Ruta: \"{ruta}\"")
                         continue
 
-                    print(f"[{estado}] Usuario: {usuario} | Ruta: \"{ruta}\"")
-                    registrar_log(usuario, ip, ruta, estado)
-                    proteger_archivo(ruta)
-                    enviar_alerta_gmail(usuario, ip, ruta, estado)
+                    # Solo enviamos alerta si el acceso fue a un archivo peligroso por un usuario normal
+                    if usuario != "root" and ruta in ARCHIVOS_PELIGROSOS:
+                        print(f"[ALERTA] Intento de acceso a archivo sensible: {usuario} | Ruta: \"{ruta}\"")
+                        registrar_log(usuario, ip, ruta, estado)
+                        enviar_alerta_gmail(usuario, ip, ruta, estado)
 
             time.sleep(INTERVALO)
 
