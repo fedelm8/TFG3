@@ -89,49 +89,47 @@ def monitorear():
             logs = resultado.stdout.decode().split("\n\n")
 
             for log in logs:
-                if not log:
-                    continue
+                if log:
+                    ruta = "desconocida"
+                    uid = "desconocido"
+                    usuario = "desconocido"
+                    ip = "localhost"
+                    estado = "DESCONOCIDO"
 
-                ruta = "desconocida"
-                uid = "desconocido"
-                usuario = "desconocido"
-                ip = "localhost"
-                estado = "DESCONOCIDO"
+                    for line in log.splitlines():
+                        if "name=" in line:
+                            for archivo in ARCHIVOS_PELIGROSOS:
+                                if f'name="{archivo}"' in line:
+                                    ruta = archivo
+                                    break
 
-                for line in log.splitlines():
-                    if "name=" in line:
-                        for archivo in ARCHIVOS_PELIGROSOS:
-                            if f'name="{archivo}"' in line:
-                                ruta = archivo
-                                break
-
-                    if "type=SYSCALL" in line and "success=" in line:
-                        partes = line.split()
-                        success_val = next((p for p in partes if p.startswith("success=")), "")
-                        estado = "INTENTO EXITOSO" if success_val == "success=yes" else "INTENTO FALLIDO"
-
-                    if "uid=" in line and "auid=" in line:
-                        try:
+                        if "type=SYSCALL" in line and "success=" in line:
                             partes = line.split()
-                            for parte in partes:
-                                if parte.startswith("uid="):
-                                    uid = int(parte.split("=")[1])
-                                    usuario = pwd.getpwuid(uid).pw_name
-                        except:
-                            pass
+                            success_val = next((p for p in partes if p.startswith("success=")), "")
+                            estado = "INTENTO EXITOSO" if success_val == "success=yes" else "INTENTO FALLIDO"
 
-                    if "addr=" in line:
-                        ip = line.split("addr=")[-1].split()[0]
+                        if "uid=" in line and "auid=" in line:
+                            try:
+                                partes = line.split()
+                                for parte in partes:
+                                    if parte.startswith("uid="):
+                                        uid = int(parte.split("=")[1])
+                                        usuario = pwd.getpwuid(uid).pw_name
+                            except:
+                                pass
 
-                tiempo_actual = time.time()
-                if tiempo_actual - tiempo_arranque < ARRANQUE_TEMPRANO_SEGUNDOS:
-                    print(f"[IGNORADO] Acceso durante el arranque: {usuario} | Ruta: \"{ruta}\"")
-                    continue
+                        if "addr=" in line:
+                            ip = line.split("addr=")[-1].split()[0]
 
-                print(f"[{estado}] Usuario: {usuario} | Ruta: \"{ruta}\"")
-                registrar_log(usuario, ip, ruta, estado)
-                proteger_archivo(ruta)
-                enviar_alerta_gmail(usuario, ip, ruta, estado)
+                    tiempo_actual = time.time()
+                    if tiempo_actual - tiempo_arranque < ARRANQUE_TEMPRANO_SEGUNDOS:
+                        print(f"[IGNORADO] Acceso durante el arranque: {usuario} | Ruta: \"{ruta}\"")
+                        continue
+
+                    print(f"[{estado}] Usuario: {usuario} | Ruta: \"{ruta}\"")
+                    registrar_log(usuario, ip, ruta, estado)
+                    proteger_archivo(ruta)
+                    enviar_alerta_gmail(usuario, ip, ruta, estado)
 
             time.sleep(INTERVALO)
 
