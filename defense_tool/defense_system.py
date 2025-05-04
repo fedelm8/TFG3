@@ -1,3 +1,4 @@
+
 import subprocess
 import os
 import time
@@ -18,8 +19,6 @@ LOG_DIR = os.path.join(BASE_DIR, "logs")
 LOG_PATH = os.path.join(LOG_DIR, "accesos.log")
 
 os.makedirs(LOG_DIR, exist_ok=True)
-
-eventos_detectados = set()
 
 def registrar_log(usuario, ip, ruta, estado):
     mensaje = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {estado} | Usuario: {usuario} | IP: {ip} | Ruta: \"{ruta}\"\n"
@@ -70,7 +69,6 @@ def proteger_archivo(ruta):
         print(f"[X] Error al bloquear el archivo: {e}")
 
 def obtener_tiempo_arranque():
-    """Obtiene el tiempo de arranque del sistema en segundos."""
     boot_time = psutil.boot_time()
     return boot_time
 
@@ -80,9 +78,7 @@ def monitorear():
     print("[*] Esperando a que el sistema se estabilice...")
     time.sleep(10)
 
-    # Obtener el tiempo de arranque del sistema
     tiempo_arranque = obtener_tiempo_arranque()
-
     timestamp = datetime.now().strftime("%H:%M:%S")
     print(f"[*] Ignorando eventos anteriores a {timestamp}\n")
 
@@ -97,54 +93,55 @@ def monitorear():
             logs = resultado.stdout.decode().split("\n\n")
 
             for log in logs:
-                if log and log not in eventos_detectados:
-                    ruta = "desconocida"
-                    uid = "desconocido"
-                    usuario = "desconocido"
-                    ip = "localhost"
-                    estado = "DESCONOCIDO"
+                if not log.strip():
+                    continue
 
-                    for line in log.splitlines():
-                        if "name=" in line:
-                            for archivo in ARCHIVOS_PELIGROSOS:
-                                if f'name="{archivo}"' in line:
-                                    ruta = archivo
-                                    break
+                ruta = "desconocida"
+                uid = "desconocido"
+                usuario = "desconocido"
+                ip = "localhost"
+                estado = "DESCONOCIDO"
+                auid = -1
 
-                        if "type=SYSCALL" in line and "success=" in line:
+                for line in log.splitlines():
+                    if "name=" in line:
+                        for archivo in ARCHIVOS_PELIGROSOS:
+                            if f'name="{archivo}"' in line:
+                                ruta = archivo
+                                break
+
+                    if "type=SYSCALL" in line and "success=" in line:
+                        partes = line.split()
+                        success_val = next((p for p in partes if p.startswith("success=")), "")
+                        estado = "INTENTO EXITOSO" if success_val == "success=yes" else "INTENTO FALLIDO"
+
+                    if "uid=" in line and "auid=" in line:
+                        try:
                             partes = line.split()
-                            success_val = next((p for p in partes if p.startswith("success=")), "")
-                            estado = "INTENTO EXITOSO" if success_val == "success=yes" else "INTENTO FALLIDO"
+                            for parte in partes:
+                                if parte.startswith("uid="):
+                                    uid = int(parte.split("=")[1])
+                                    usuario = pwd.getpwuid(uid).pw_name
+                                if parte.startswith("auid="):
+                                    auid = int(parte.split("=")[1])
+                        except:
+                            continue
 
-                        if "uid=" in line and "auid=" in line:
-                            try:
-                                partes = line.split()
-                                for parte in partes:
-                                    if parte.startswith("uid="):
-                                        uid = int(parte.split("=")[1])
-                                        usuario = pwd.getpwuid(uid).pw_name
-                            except:
-                                pass
+                    if "addr=" in line:
+                        ip = line.split("addr=")[-1].split()[0]
 
-                        if "addr=" in line:
-                            ip = line.split("addr=")[-1].split()[0]
+                if auid < 1000:
+                    continue  # Ignorar accesos del sistema
 
-                    # Comprobar si el evento ocurrió durante el tiempo de arranque
-                    tiempo_actual = time.time()
-                    if tiempo_actual - tiempo_arranque < ARRANQUE_TEMPRANO_SEGUNDOS:
-                        print(f"[IGNORADO] Acceso durante el arranque: {usuario} | Ruta: \"{ruta}\"")
-                        continue
+                tiempo_actual = time.time()
+                if tiempo_actual - tiempo_arranque < ARRANQUE_TEMPRANO_SEGUNDOS:
+                    print(f"[IGNORADO] Acceso durante el arranque: {usuario} | Ruta: \"{ruta}\"")
+                    continue
 
-                    # Verificar si el evento ya ha sido registrado
-                    evento_id = f"{usuario}-{ruta}-{ip}"
-                    if evento_id in eventos_detectados:
-                        continue
-
-                    print(f"[{estado}] Usuario: {usuario} | Ruta: \"{ruta}\"")
-                    registrar_log(usuario, ip, ruta, estado)
-                    proteger_archivo(ruta)
-                    enviar_alerta_gmail(usuario, ip, ruta, estado)
-                    eventos_detectados.add(evento_id)
+                print(f"[{estado}] Usuario: {usuario} | Ruta: \"{ruta}\"")
+                registrar_log(usuario, ip, ruta, estado)
+                proteger_archivo(ruta)
+                enviar_alerta_gmail(usuario, ip, ruta, estado)
 
             time.sleep(INTERVALO)
 
