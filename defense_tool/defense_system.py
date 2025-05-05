@@ -6,12 +6,12 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import pwd
-import psutil  # Necesitamos psutil para obtener el tiempo de arranque
+import psutil  
 
-ARCHIVOS_PELIGROSOS = ["/etc/shadow", "/etc/passwd", "/etc/sudoers"]
+ARCHIVOS_PELIGROSOS = ["/etc/shadow"] #fácil para añadir más archivos
 CLAVE = "clave_defensa"
 INTERVALO = 2
-ARRANQUE_TEMPRANO_SEGUNDOS = 30  # Tiempo en segundos para ignorar eventos de arranque
+ARRANQUE_TEMPRANO_SEGUNDOS = 30  
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(BASE_DIR, "logs")
@@ -80,7 +80,6 @@ def monitorear():
     print("[*] Esperando a que el sistema se estabilice...")
     time.sleep(10)
 
-    # Obtener el tiempo de arranque del sistema
     tiempo_arranque = obtener_tiempo_arranque()
 
     timestamp = datetime.now().strftime("%H:%M:%S")
@@ -129,13 +128,13 @@ def monitorear():
                         if "addr=" in line:
                             ip = line.split("addr=")[-1].split()[0]
 
-                    # Comprobar si el evento ocurrió durante el tiempo de arranque
+                    
                     tiempo_actual = time.time()
                     if tiempo_actual - tiempo_arranque < ARRANQUE_TEMPRANO_SEGUNDOS:
                         print(f"[IGNORADO] Acceso durante el arranque: {usuario} | Ruta: \"{ruta}\"")
                         continue
 
-                    # Verificar si el evento ya ha sido registrado
+                    
                     evento_id = f"{usuario}-{ruta}-{ip}"
                     if evento_id in eventos_detectados:
                         continue
